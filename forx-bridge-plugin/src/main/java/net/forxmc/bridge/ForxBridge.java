@@ -14,6 +14,7 @@ public final class ForxBridge extends JavaPlugin implements CommandExecutor {
 
     private BridgeHttpServer httpServer;
     private final Set<String> processedOrders = new HashSet<>();
+    private boolean debugMode = false;
 
     @Override
     public void onEnable() {
@@ -40,8 +41,10 @@ public final class ForxBridge extends JavaPlugin implements CommandExecutor {
         int port = getConfig().getInt("port", 8080);
         String apiKey = getConfig().getString("api-key", "CHANGE_ME_SECURE_KEY");
         java.util.List<String> allowedIps = getConfig().getStringList("allowed-ips");
+        this.debugMode = getConfig().getBoolean("debug", false);
 
-        httpServer = new BridgeHttpServer(this, port, apiKey, allowedIps);
+        // Matching the 5-argument constructor perfectly
+        httpServer = new BridgeHttpServer(this, port, apiKey, allowedIps, debugMode);
         httpServer.start();
     }
 
@@ -52,8 +55,12 @@ public final class ForxBridge extends JavaPlugin implements CommandExecutor {
         }
     }
 
-    public Set<String> getProcessedOrders() {
-        return this.processedOrders;
+    public boolean isOrderProcessed(String orderId) {
+        return this.processedOrders.contains(orderId);
+    }
+
+    public void markOrderProcessed(String orderId) {
+        this.processedOrders.add(orderId);
     }
 
     @Override
