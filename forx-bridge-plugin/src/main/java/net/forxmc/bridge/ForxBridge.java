@@ -1,105 +1,87 @@
 package net.forxmc.bridge;
 
+import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.jetbrains.annotations.NotNull;
 
-import java.io.File;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.logging.Level;
 
 public final class ForxBridge extends JavaPlugin implements CommandExecutor {
 
     private BridgeHttpServer httpServer;
-    private final Set<String> processedOrders = Collections.synchronizedSet(new HashSet<>());
+    private final Set<String> processedOrders = new HashSet<>();
 
     @Override
     public void onEnable() {
-        // Save default config if not present
         saveDefaultConfig();
-        
-        // Start HTTP Server
-        startHttpServer();
+        reloadPluginConfig();
 
-        // Register Command
-        if (getCommand("forxbridge") != null) {
-            getCommand("forxbridge").setExecutor(this);
-        } else {
-            getLogger().info("No system command registered via plugin.yml. Using internal command registration.");
+        if (getCommand("forx") != null) {
+            getCommand("forx").setExecutor(this);
         }
 
-        getLogger().info("=========================================");
-        getLogger().info("  FORX Bridge has been successfully enabled! ");
-        getLogger().info("  Listening on port: " + getConfig().getInt("port", 8080));
-        getLogger().info("=========================================");
+        getLogger().info("FORX Bridge has been successfully enabled!");
     }
 
     @Override
     public void onDisable() {
         stopHttpServer();
-        getLogger().info("FORX Bridge has been successfully disabled.");
+        getLogger().info("FORX Bridge has been safely shut down.");
     }
 
-    public void startHttpServer() {
+    public void reloadPluginConfig() {
+        reloadConfig();
         stopHttpServer();
-        
+
         int port = getConfig().getInt("port", 8080);
         String apiKey = getConfig().getString("api-key", "CHANGE_ME_SECURE_KEY");
-        boolean debug = getConfig().getBoolean("debug", false);
         java.util.List<String> allowedIps = getConfig().getStringList("allowed-ips");
 
-        if ("CHANGE_ME_SECURE_KEY".equals(apiKey) || apiKey.trim().isEmpty()) {
-            getLogger().warning("=========================================================================");
-            getLogger().warning("  WARNING: YOU ARE USING THE DEFAULT OR AN EMPTY API KEY!");
-            getLogger().warning("  Please change 'api-key' in config.yml to secure your server execution!");
-            getLogger().warning("=========================================================================");
-        }
-
-        try {
-            httpServer = new BridgeHttpServer(this, port, apiKey, allowedIps, debug);
-            httpServer.start();
-        } catch (Exception e) {
-            getLogger().log(Level.SEVERE, "Failed to initialize secure FORX Bridge HTTP Server on port " + port, e);
-        }
+        httpServer = new BridgeHttpServer(this, port, apiKey, allowedIps);
+        httpServer.start();
     }
 
-    public void stopHttpServer() {
+    private void stopHttpServer() {
         if (httpServer != null) {
             httpServer.stop();
             httpServer = null;
         }
     }
 
-    public boolean isOrderProcessed(String orderId) {
-        if (orderId == null || orderId.trim().isEmpty()) return false;
-        return processedOrders.contains(orderId.trim());
-    }
-
-    public void markOrderProcessed(String orderId) {
-        if (orderId != null && !orderId.trim().isEmpty()) {
-            processedOrders.add(orderId.trim());
-        }
+    public Set<String> getProcessedOrders() {
+        return this.processedOrders;
     }
 
     @Override
-    public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-        if (args.length > 0 && "reload".equalsIgnoreCase(args[0])) {
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command cmd, @NotNull String label, String[] args) {
+        if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
             if (!sender.hasPermission("forxbridge.admin")) {
-                sender.sendMessage("§cYou do not have permission to execute this command!");
+                sender.sendMessage(ChatColor.RED + "You do not have permission to run this command.");
                 return true;
             }
-            
-            reloadConfig();
-            startHttpServer();
-            sender.sendMessage("§a[FORX Bridge] Configuration reloaded successfully and Server restarted!");
+            reloadPluginConfig();
+            sender.sendMessage(ChatColor.GREEN + "[FORX Bridge] Configuration and server endpoints reloaded successfully.");
             return true;
         }
 
-        sender.sendMessage("§e=== FORX Bridge Commands ===");
-        sender.sendMessage("§6/forxbridge reload §7- Reloads the config file and restarts the server.");
+        if (args.length > 0 && args[0].equalsIgnoreCase("status")) {
+            if (!sender.hasPermission("forxbridge.admin")) {
+                sender.sendMessage(ChatColor.RED + "You do not have permission to run this command.");
+                return true;
+            }
+            sender.sendMessage(ChatColor.AQUA + "=== FORX Bridge Status ===");
+            sender.sendMessage(ChatColor.YELLOW + "API Port: " + ChatColor.WHITE + getConfig().getInt("port"));
+            sender.sendMessage(ChatColor.YELLOW + "Players Online: " + ChatColor.WHITE + getServer().getOnlinePlayers().size());
+            sender.sendMessage(ChatColor.YELLOW + "Server Version: " + ChatColor.WHITE + getServer().getMinecraftVersion());
+            sender.sendMessage(ChatColor.GREEN + "Bridge HTTP status: Active and listening.");
+            return true;
+        }
+
+        sender.sendMessage(ChatColor.YELLOW + "Usage: /forx [reload|status]");
         return true;
     }
 }
