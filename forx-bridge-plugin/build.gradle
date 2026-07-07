@@ -1,7 +1,7 @@
 
 plugins {
     id 'java'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'com.github.johnrengelman.shadow' version '8.3.5'
 }
 group = 'net.forxmc'
 version = '1.0.0'
@@ -46,4 +46,9 @@ processResources {
 
 jar {
     archiveClassifier.set('')
+}
+
+shadowJar {
+    archiveClassifier.set('all')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
