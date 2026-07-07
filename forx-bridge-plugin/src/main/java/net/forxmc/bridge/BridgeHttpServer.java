@@ -20,13 +20,15 @@ public final class BridgeHttpServer {
     private final int port;
     private final String apiKey;
     private final List<String> allowedIps;
+    private final boolean debug;
     private HttpServer server;
 
-    public BridgeHttpServer(ForxBridge plugin, int port, String apiKey, List<String> allowedIps) {
+    public BridgeHttpServer(ForxBridge plugin, int port, String apiKey, List<String> allowedIps, boolean debug) {
         this.plugin = plugin;
         this.port = port;
         this.apiKey = apiKey;
         this.allowedIps = allowedIps;
+        this.debug = debug;
     }
 
     public void start() {
@@ -107,12 +109,12 @@ public final class BridgeHttpServer {
                 return;
             }
 
-            if (plugin.getProcessedOrders().contains(orderId)) {
+            if (plugin.isOrderProcessed(orderId)) {
                 sendResponse(exchange, 409, "{\"error\":\"Duplicate order detection. Already executed.\"}");
                 return;
             }
 
-            plugin.getProcessedOrders().add(orderId);
+            plugin.markOrderProcessed(orderId);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 plugin.getLogger().info("Executing custom store command for Order #" + orderId + ": " + command);
@@ -138,7 +140,7 @@ public final class BridgeHttpServer {
             }
 
             int onlinePlayers = Bukkit.getOnlinePlayers().size();
-            double currentTps = 20.0; // Paper internal tracking handles actual profiling via metrics loops natively
+            double currentTps = 20.0;
             String version = Bukkit.getMinecraftVersion();
 
             String response = String.format(
