@@ -41,8 +41,8 @@ public final class ForxBridge extends JavaPlugin implements CommandExecutor {
         String apiKey = getConfig().getString("api-key", "CHANGE_ME_SECURE_KEY");
         java.util.List<String> allowedIps = getConfig().getStringList("allowed-ips");
 
-        // Simple 4-argument constructor match
-        httpServer = new BridgeHttpServer(this, port, apiKey, allowedIps);
+        // Appending 'false' as the 5th argument to perfectly match what your server class requires
+        httpServer = new BridgeHttpServer(this, port, apiKey, allowedIps, false);
         httpServer.start();
     }
 
