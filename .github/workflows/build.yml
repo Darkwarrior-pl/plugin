@@ -23,4 +23,10 @@ jobs:
 
     - name: Build with Gradle
       working-directory: forx-bridge-plugin
-      run: gradle build
+      run: gradle shadowJar
+
+    - name: Upload Plugin Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: FORX-Bridge-Plugin
+        path: forx-bridge-plugin/build/libs/*.jar
