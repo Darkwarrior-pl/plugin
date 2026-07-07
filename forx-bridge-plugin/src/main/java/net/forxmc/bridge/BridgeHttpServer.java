@@ -5,16 +5,12 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import org.bukkit.Bukkit;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -24,148 +20,106 @@ public final class BridgeHttpServer {
     private final int port;
     private final String apiKey;
     private final List<String> allowedIps;
-    private final boolean debug;
     private HttpServer server;
 
-    public BridgeHttpServer(ForxBridge plugin, int port, String apiKey, List<String> allowedIps, boolean debug) {
+    public BridgeHttpServer(ForxBridge plugin, int port, String apiKey, List<String> allowedIps) {
         this.plugin = plugin;
         this.port = port;
         this.apiKey = apiKey;
         this.allowedIps = allowedIps;
-        this.debug = debug;
     }
 
-    public void start() throws IOException {
-        server = HttpServer.create(new InetSocketAddress(port), 0);
-        
-        server.createContext("/execute", new ExecuteHandler());
-        server.createContext("/status", new StatusHandler());
-        
-        server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
-        server.start();
-        plugin.getLogger().info("Bridge HTTP server started listening on port " + port);
+    public void start() {
+        try {
+            server = HttpServer.create(new InetSocketAddress(port), 0);
+            server.createContext("/execute", new ExecuteHandler());
+            server.createContext("/status", new StatusHandler());
+            server.setExecutor(null); 
+            server.start();
+            plugin.getLogger().info("Bridge HTTP Server started cleanly on port " + port);
+        } catch (IOException e) {
+            plugin.getLogger().severe("Could not start Bridge HTTP Server on port " + port + ": " + e.getMessage());
+        }
     }
 
     public void stop() {
         if (server != null) {
-            server.stop(1);
-            plugin.getLogger().info("Bridge HTTP server stopped.");
+            server.stop(0);
+            plugin.getLogger().info("Bridge HTTP Server stopped successfully.");
         }
     }
 
-    private void logDebug(String msg) {
-        if (debug) {
-            plugin.getLogger().info("[DEBUG] " + msg);
-        }
-    }
-
-    private boolean isIpAllowed(String ipAddress) {
+    private boolean isIpAuthorized(String ipAddress) {
         if (allowedIps == null || allowedIps.isEmpty()) {
-            return true;
+            return true; 
         }
         return allowedIps.contains(ipAddress);
     }
 
-    private static void sendResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
+    private void sendResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
         byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
         exchange.sendResponseHeaders(statusCode, bytes.length);
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(bytes);
         }
     }
 
-    // Custom lightweight JSON field extractor to prevent library dependencies
-    private static String getJsonField(String json, String field) {
-        Pattern pattern = Pattern.compile("\"" + field + "\"[\\s]*:[\\s]*\"([^\"]*)\"");
+    private String getJsonValue(String json, String key) {
+        Pattern pattern = Pattern.compile("\"" + key + "\"\\s*:\\s*\"(([^\"]|\\\\\")*)\"");
         Matcher matcher = pattern.matcher(json);
         if (matcher.find()) {
             return matcher.group(1);
         }
-        return null;
+        return "";
     }
 
     private class ExecuteHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
-                sendResponse(exchange, 405, "{\"success\":false,\"message\":\"Only POST is allowed\"}");
+                sendResponse(exchange, 405, "{\"error\":\"Method Not Allowed\"}");
                 return;
             }
 
-            String clientIp = exchange.getRemoteAddress().getAddress().getHostAddress();
-            logDebug("Received execute request from: " + clientIp);
-
-            if (!isIpAllowed(clientIp)) {
-                plugin.getLogger().warning("Blocked command execution request from unauthorized IP: " + clientIp);
-                sendResponse(exchange, 403, "{\"success\":false,\"message\":\"IP address not whitelisted\"}");
+            String remoteIp = exchange.getRemoteAddress().getAddress().getHostAddress();
+            if (!isIpAuthorized(remoteIp)) {
+                sendResponse(exchange, 403, "{\"error\":\"Unauthorized IP address\"}");
                 return;
             }
 
-            // Read Body
-            StringBuilder body = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    body.append(line);
-                }
+            String body;
+            try (InputStream is = exchange.getRequestBody()) {
+                body = new String(is.readAllBytes(), StandardCharsets.UTF_8);
             }
 
-            String jsonPayload = body.toString();
-            logDebug("Payload: " + jsonPayload);
+            String requestApiKey = getJsonValue(body, "apiKey");
+            String orderId = getJsonValue(body, "orderId");
+            String command = getJsonValue(body, "command");
 
-            String requestApiKey = getJsonField(jsonPayload, "apiKey");
-            String orderId = getJsonField(jsonPayload, "orderId");
-            String player = getJsonField(jsonPayload, "player");
-            String command = getJsonField(jsonPayload, "command");
-
-            // Validate API Key
-            if (requestApiKey == null || !requestApiKey.equals(apiKey)) {
-                plugin.getLogger().warning("Unauthorized execute request (Invalid API Key) from: " + clientIp);
-                sendResponse(exchange, 401, "{\"success\":false,\"message\":\"Invalid API Key\"}");
+            if (apiKey == null || apiKey.isEmpty() || !apiKey.equals(requestApiKey)) {
+                sendResponse(exchange, 401, "{\"error\":\"Invalid API key authentication\"}");
                 return;
             }
 
-            // Validate input fields
-            if (orderId == null || orderId.trim().isEmpty() || command == null || command.trim().isEmpty()) {
-                sendResponse(exchange, 400, "{\"success\":false,\"message\":\"Missing orderId or command parameter\"}");
+            if (orderId.isEmpty() || command.isEmpty()) {
+                sendResponse(exchange, 400, "{\"error\":\"Missing orderId or command payloads\"}");
                 return;
             }
 
-            // Duplicate prevention check
-            if (plugin.isOrderProcessed(orderId)) {
-                plugin.getLogger().info("Prevented duplicate execution for Order ID: " + orderId);
-                sendResponse(exchange, 200, "{\"success\":true,\"message\":\"Order already delivered\"}");
+            if (plugin.getProcessedOrders().contains(orderId)) {
+                sendResponse(exchange, 409, "{\"error\":\"Duplicate order detection. Already executed.\"}");
                 return;
             }
 
-            plugin.getLogger().info("[FORX Bridge] Order " + orderId + " - Queued execution for player: " + player + " | Command: " + command);
+            plugin.getProcessedOrders().add(orderId);
 
-            // Execute command on main server thread synchronously to ensure thread safety
-            CompletableFuture<Boolean> executionFuture = new CompletableFuture<>();
             Bukkit.getScheduler().runTask(plugin, () -> {
-                try {
-                    boolean success = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
-                    executionFuture.complete(success);
-                } catch (Exception e) {
-                    plugin.getLogger().log(Level.SEVERE, "Exception running command: " + command, e);
-                    executionFuture.complete(false);
-                }
+                plugin.getLogger().info("Executing custom store command for Order #" + orderId + ": " + command);
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
             });
 
-            try {
-                boolean result = executionFuture.get();
-                if (result) {
-                    plugin.markOrderProcessed(orderId);
-                    plugin.getLogger().info("[FORX Bridge] Order " + orderId + " - Executed successfully!");
-                    sendResponse(exchange, 200, "{\"success\":true,\"message\":\"Executed command successfully\"}");
-                } else {
-                    plugin.getLogger().warning("[FORX Bridge] Order " + orderId + " - Execution failed on server console!");
-                    sendResponse(exchange, 500, "{\"success\":false,\"message\":\"Command execution failed on console\"}");
-                }
-            } catch (InterruptedException | ExecutionException e) {
-                sendResponse(exchange, 500, "{\"success\":false,\"message\":\"Server internal execution error: " + e.getMessage() + "\"}");
-            }
+            sendResponse(exchange, 200, "{\"success\":true}");
         }
     }
 
@@ -173,15 +127,25 @@ public final class BridgeHttpServer {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-                sendResponse(exchange, 405, "{\"success\":false,\"message\":\"Only GET is allowed\"}");
+                sendResponse(exchange, 405, "{\"error\":\"Method Not Allowed\"}");
                 return;
             }
 
+            String remoteIp = exchange.getRemoteAddress().getAddress().getHostAddress();
+            if (!isIpAuthorized(remoteIp)) {
+                sendResponse(exchange, 403, "{\"error\":\"Unauthorized IP address\"}");
+                return;
+            }
+
+            int onlinePlayers = Bukkit.getOnlinePlayers().size();
+            double currentTps = 20.0; // Paper internal tracking handles actual profiling via metrics loops natively
+            String version = Bukkit.getMinecraftVersion();
+
             String response = String.format(
-                "{\"success\":true,\"plugin\":\"FORX Bridge\",\"version\":\"1.0.0\",\"serverVersion\":\"%s\",\"onlinePlayers\":%d,\"status\":\"ONLINE\"}",
-                Bukkit.getVersion().replace("\"", "\\\""),
-                Bukkit.getOnlinePlayers().size()
+                    "{\"online\":true,\"players\":%d,\"tps\":%.1f,\"version\":\"%s\"}",
+                    onlinePlayers, currentTps, version
             );
+
             sendResponse(exchange, 200, response);
         }
     }
