@@ -1,6 +1,15 @@
-name: ForxBridge
-version: '${version}'
+name: FORXBridge
+version: '1.0.0'
 main: net.forxmc.bridge.ForxBridge
 api-version: '1.21'
-author: FORX
-description: Secure real-time command delivery bridge for FORX Store.
+author: FORXSTORE
+description: Secure HTTP bridge connecting FORX STORE to execution commands.
+commands:
+  forx:
+    description: Main command for FORX Bridge.
+    permission: forxbridge.admin
+    usage: /<command> [reload|status]
+permissions:
+  forxbridge.admin:
+    description: Allows full access to FORX Bridge configuration and status commands.
+    default: op
