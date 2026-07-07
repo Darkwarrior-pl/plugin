@@ -20,15 +20,14 @@ public final class BridgeHttpServer {
     private final int port;
     private final String apiKey;
     private final List<String> allowedIps;
-    private final boolean debug;
     private HttpServer server;
 
-    public BridgeHttpServer(ForxBridge plugin, int port, String apiKey, List<String> allowedIps, boolean debug) {
+    // Simple 4-argument constructor match
+    public BridgeHttpServer(ForxBridge plugin, int port, String apiKey, List<String> allowedIps) {
         this.plugin = plugin;
         this.port = port;
         this.apiKey = apiKey;
         this.allowedIps = allowedIps;
-        this.debug = debug;
     }
 
     public void start() {
@@ -109,6 +108,7 @@ public final class BridgeHttpServer {
                 return;
             }
 
+            // Using explicit methods to avoid symbol issues
             if (plugin.isOrderProcessed(orderId)) {
                 sendResponse(exchange, 409, "{\"error\":\"Duplicate order detection. Already executed.\"}");
                 return;
