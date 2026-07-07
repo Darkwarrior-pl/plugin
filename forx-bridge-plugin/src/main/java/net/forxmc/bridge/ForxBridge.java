@@ -42,7 +42,7 @@ public final class ForxBridge extends JavaPlugin implements CommandExecutor {
         java.util.List<String> allowedIps = getConfig().getStringList("allowed-ips");
 
         // Appending 'false' as the 5th argument to perfectly match what your server class requires
-        httpServer = new BridgeHttpServer(this, port, apiKey, allowedIps, false);
+httpServer = new BridgeHttpServer(this, port, apiKey, allowedIps);
         httpServer.start();
     }
 
