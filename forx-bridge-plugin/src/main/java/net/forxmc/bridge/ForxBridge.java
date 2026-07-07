@@ -14,7 +14,6 @@ public final class ForxBridge extends JavaPlugin implements CommandExecutor {
 
     private BridgeHttpServer httpServer;
     private final Set<String> processedOrders = new HashSet<>();
-    private boolean debugMode = false;
 
     @Override
     public void onEnable() {
@@ -41,10 +40,9 @@ public final class ForxBridge extends JavaPlugin implements CommandExecutor {
         int port = getConfig().getInt("port", 8080);
         String apiKey = getConfig().getString("api-key", "CHANGE_ME_SECURE_KEY");
         java.util.List<String> allowedIps = getConfig().getStringList("allowed-ips");
-        this.debugMode = getConfig().getBoolean("debug", false);
 
-        // Matching the 5-argument constructor perfectly
-        httpServer = new BridgeHttpServer(this, port, apiKey, allowedIps, debugMode);
+        // Simple 4-argument constructor match
+        httpServer = new BridgeHttpServer(this, port, apiKey, allowedIps);
         httpServer.start();
     }
 
