@@ -1,0 +1,15 @@
+# FORX Bridge Configuration File
+
+# Port to bind the secure bridge HTTP server to
+port: 8080
+
+# The secret API Key used to authenticate incoming webhook requests from the store.
+# !!! KEEP THIS KEY EXTREMELY SECRET AND DO NOT SHARE IT WITH ANYONE !!!
+api-key: "CHANGE_ME_SECURE_KEY"
+
+# Allowlists of IPs authorized to issue commands to the bridge.
+# If empty, requests from any IP are evaluated (validated solely by API Key).
+allowed-ips: []
+
+# Enable detailed verbose logging to the console
+debug: false

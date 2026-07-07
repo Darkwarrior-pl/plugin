@@ -1,0 +1,6 @@
+name: ForxBridge
+version: '${version}'
+main: net.forxmc.bridge.ForxBridge
+api-version: '1.21'
+author: FORX
+description: Secure real-time command delivery bridge for FORX Store.
